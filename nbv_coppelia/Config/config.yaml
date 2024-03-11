@@ -1,0 +1,73 @@
+---
+CameraParameters:
+  imWidth: 640
+  imHeight: 480
+  camFov: 74
+ 
+VelocityControllerSettings:
+  controllerGain: 5
+  controllerDamping: 0.01
+  errorTolerance: 0.01
+  stabilityThreshold: 0.001
+  maxStabilityCount: 250
+  maxTimeLimit: 20
+PositionControllerSettings:
+  controllerGain: 5
+  controllerDamping: 0.01
+  errorTolerance: 0.05
+  stabilityThreshold: 0.001
+  maxStabilityCount: 250
+  integrationTimeStep: 0.05
+  maxTimeLimit: 20
+  
+ProcessVariables:
+  enableVisibilityConst: False
+  enableCollisionConst: True
+  enableJointLimitConst: True
+  enableVelocityControl: True
+  enablePoseControl: False
+  
+
+SimulatorSettings:
+  sceneNameVelocity: "scene/nbv_scene_for_video.ttt" #"scene/nbv_scene_velocity_control.ttt" # Simulation scene for the velocity control (joints and dynamics adjusted accordingly)
+  simTimeStepVelocity: 0.05
+  sceneNamePosition: "scene/nbv_scene_position_control.ttt" # Simulation scene for the position control (joints and dynamics adjusted accordingly)
+  simTimeStepPosition: 0.05
+
+## Joint position and velocity limits
+JointContraints:
+  velLimBase: 0.1
+  velLimArm: 0.1
+  armJointLimMax: [169, 75, 131, 102, 90]
+  armJointLimMin: [-169, -90, -131, -102, -90]
+
+## Visibility constraint parameters
+VisibilityConstraint:
+  safeDistVisibility: 0.75
+  softAlpha: 2       # Alpha and beta determine the decaying rate of the soft visibility constraint depending on distance to the target
+  softBeta: 1.2
+
+## Number and radius of cylinderical obstacles
+BaseObstacleConstraint:
+  baseObsCount: 17
+  baseObsRadius: 0.1
+
+NBV:
+  useFocusPoint: False # Calculate a focus point in the informative region
+  useRrtIPP: True
+  maxNBVCalls: 15
+  focusUpdateDistance: 1 # Update distance of the focus point, if the robot moves more than this value, new focus point is calculated
+  objectsPath: "/home/fth/selected_objects" 
+  groundTruthPath: "nbv_coppelia/DatasetGT"
+  resultSavePath: "nbv_coppelia/Results" 
+  savePcl: False
+  nodeFreq: 50
+
+Visual:
+  showRrtPath: False
+  showAllSamples: False
+  showAllNodes: False
+  showSphereSamples: False
+  
+
+  

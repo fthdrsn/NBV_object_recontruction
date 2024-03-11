@@ -1,0 +1,4 @@
+string ig_method
+float32[] view_list
+---
+float32[] view_igs

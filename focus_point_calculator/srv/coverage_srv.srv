@@ -1,0 +1,7 @@
+
+---
+float32 cvr
+float32 ent
+float32 unknown
+float32 occupied
+float32 free

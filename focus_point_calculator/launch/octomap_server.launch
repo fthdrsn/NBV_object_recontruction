@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="robot_namespace" default=""/>
+
+  <node name="octomap_server" pkg="octomap_server" type="octomap_server_node" clear_params="true">
+
+    <param name="frame_id" type="string" value="world"/>
+    <param name="resolution" value="0.03"/>
+    <param name="base_frame_id" value="kinect_depth"/>
+    <param name="sensor_model/max_range" value="4.5"/>
+
+    <param name="filter_ground" type="bool" value="true"/>
+
+    <remap from="cloud_in" to="/world/pcl_input"/>
+  </node>
+</launch>
