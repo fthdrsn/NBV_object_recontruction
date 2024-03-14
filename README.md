@@ -27,7 +27,16 @@ We provide two packages:
 
 **nbv_coppelia:** This package launches CoppeliaSim, manages robot control, and publishes the required ROS topics.
 
+
 ### Running The Code
+
+Open a new terminal and run the roscore
+
+```
+roscore
+```
+In another terminal, run our code
+
 ```
 cd your_ws/src
 python3 object_reconstruction_youbot.py

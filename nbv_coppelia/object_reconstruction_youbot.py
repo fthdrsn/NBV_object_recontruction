@@ -106,6 +106,10 @@ class NBV:
         self.enable_collision_constraints = self.params["ProcessVariables"]["enableCollisionConst"]
         self.robot_to_far = False
 
+        # Get required paths
+        self.launch_file_path = self.params["NBV"]["launchFilePath"]
+        self.search_space_path = self.params["NBV"]["searchSpacePath"]
+
         # Base and Arm Velocity Limits
         self.vel_lim_base = self.params["JointContraints"]["velLimBase"]
         self.vel_lim_arm = self.params["JointContraints"]["velLimArm"]
@@ -177,7 +181,7 @@ class NBV:
                     self.selected_objects.append(self.shape_net_path+"/"+obj)
 
         self.view_space = np.loadtxt(
-            "/home/fth/focus_point_ws/src/nbv_coppelia/ViewSpace/sample_space_up_down.txt")
+            self.search_space_path)
         self.run_planner()
 
     def make_ready_for_new_iteration(self):
@@ -193,7 +197,7 @@ class NBV:
         self.run_id = rospy.get_param('/run_id')
         # self.ig_method = "area_factor"
         self.roslaunch_parent = roslaunch.parent.ROSLaunchParent(
-            self.run_id, [f"/home/fth/focus_point_ws/src/focus_point_calculator/launch/run_application.launch"])
+            self.run_id, [self.launch_file_path])
         self.roslaunch_parent.start()
         time.sleep(1)
 
