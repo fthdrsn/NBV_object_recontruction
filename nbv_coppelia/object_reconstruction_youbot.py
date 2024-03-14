@@ -164,7 +164,7 @@ class NBV:
         self.gt_path = self.params["NBV"]["groundTruthPath"]
         self.object_path = self.gt_path+"/used_objects.txt"
         self.nbv_result_path = self.params["NBV"]["resultSavePath"] + \
-            "/Direction_15"
+            "/reconstruction"
         self.save_pcl = self.params["NBV"]["savePcl"]
 
         self.max_nbv_calls = self.params["NBV"]["maxNBVCalls"]
@@ -257,7 +257,7 @@ class NBV:
 
         if self.enable_visibility_constraint:
             if self.enable_focus_point:
-                self.used_strategy = "adaptive_vis"
+                self.used_strategy = "focus_point"
             else:
                 self.used_strategy = "fixed_vis"
         elif self.enable_rrt_based_ipp:
