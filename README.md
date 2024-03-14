@@ -15,7 +15,7 @@ After installing dependecies, you can install our code into your ROS workspace.
 
 ```
 cd your_ws/src
-git clone our link
+git clone https://github.com/fthdrsn/NBV_object_recontruction.git
 cd ..
 catkin build
 ```
@@ -24,6 +24,7 @@ catkin build
 We provide two packages:
 
 **focus_point_calculator:** This ROS package handles information gain calculation for NBV and focus point estimation.
+
 **nbv_coppelia:** This package launches coppeliaSim, handles the robot control and publishing required ROS topics.
 
 ### Running The Code
