@@ -46,10 +46,10 @@ class YouBotModel(BaseCommunication):
         x_bm = 1 + E_ * 0.5 * (0.156 * i_ + 0.085 * k_)
         base.set_frame_displacement(x_bm)
         kin = DQ_SerialWholeBody(base)
-        kin.add(arm)
         if is_camera_active:
             rot = math.cos(-pi2/2)+math.sin(-pi2/2)*k_
-            kin.set_effector(rot)
+            arm.set_effector(rot)
+        kin.add(arm)
         self.youbot_kinematic = kin
 
         # YouBot base in coppeliaSim does not have the same pose as the dqrobotics)(x does not face forward and there is an offset).

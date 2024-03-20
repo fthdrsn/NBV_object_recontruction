@@ -57,7 +57,7 @@ NBV:
   useRrtIPP: True
   maxNBVCalls: 15
   focusUpdateDistance: 1 # Update distance of the focus point, if the robot moves more than this value, new focus point is calculated
-  objectsPath: "/home/fth/selected_objects" # Mesh models from ShapeNet dataset
+  objectsPath: "nbv_coppelia/SelectedObjects" # Mesh models from ShapeNet dataset
   groundTruthPath: "nbv_coppelia/DatasetGT" # Created point cloud ground truth
   resultSavePath: "nbv_coppelia/Results"    # Result directory
   launchFilePath: "focus_point_calculator/launch/run_application.launch" # Path to launch file
