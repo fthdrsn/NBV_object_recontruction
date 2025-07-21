@@ -12,11 +12,16 @@ from typing import List
 
 
 class YouBotModel(BaseCommunication):
-
-    """
-    This class is for creating youbot`s kinematic model using dqrobotics library 
-    and communicating with the coppeliasim using pyrep library. The pyrep library is only used for communication purposes 
-    e.g., sending base wheel and arm joint velocities
+    """ YouBotModel class is used to interact with the YouBot robot in CoppeliaSim.
+    It provides methods to get and set the robot's pose and joint positions, as well as to control the robot in velocity mode.
+    It uses the dqrobotics library to create a kinematic model of the YouBot mobile manipulator.
+    The YouBot consists of a holonomic base and a 5-DOF arm.
+    The robot can be controlled in position or velocity mode.
+    The robot's base is modeled as a holonomic base, and the arm is modeled as a serial manipulator with DH parameters.
+    The robot's kinematic model is created using the dqrobotics library, which allows for easy manipulation of the robot's pose and joint positions.
+    The robot's base pose is adjusted to match the pose of the YouBot in CoppeliaSim, as the YouBot model in CoppeliaSim does not have the same pose as the dqrobotics model.
+    The robot's base pose is adjusted using a transformation matrix, and the robot's joint positions are set directly using the YouBot API.
+    The robot can be controlled in velocity mode by setting the wheel velocities of the holonomic base and the joint velocities of the arm.
     """
 
     def __init__(self, is_velocity_control=False):
@@ -25,6 +30,7 @@ class YouBotModel(BaseCommunication):
         self.robot_radius = 0.35
 
         # Ref dummy frane attached to the robot base(x: forward, z:up)
+        # Reference frame of the YouBot base in CoppeliaSim
         self.youbot_base_ref = PyRepObj.Object.get_object("dqRef")
         self.youbot_base_pyrep = YouBot()  # Pyrep youbot base model
         self.youbot_arm_pyrep = youBot()   # Pyrep youbot arm model
@@ -46,7 +52,7 @@ class YouBotModel(BaseCommunication):
         x_bm = 1 + E_ * 0.5 * (0.156 * i_ + 0.085 * k_)
         base.set_frame_displacement(x_bm)
         kin = DQ_SerialWholeBody(base)
-        if is_camera_active:
+        if is_camera_active:  # If camera is active, add camera transformation to the kinematic chain
             rot = math.cos(-pi2/2)+math.sin(-pi2/2)*k_
             arm.set_effector(rot)
         kin.add(arm)
@@ -59,6 +65,11 @@ class YouBotModel(BaseCommunication):
             (1 + 0.5 * E_ * -0.1 * k_)
 
     def get_q_from_sim(self):
+        """ Get the pose of the holonomic base [x,y,phi] using dq reference frame(self.youbot_base_ref )
+        and joint positions of the arm.
+        :return: base pose and arm joint position as list [x,y,phi,th0,th1,th2,th3,th4]
+        """
+
         if self.is_velocity_control:
             return self.get_q_from_sim_vel()
         else:
@@ -78,8 +89,12 @@ class YouBotModel(BaseCommunication):
         return [base_position[0], base_position[1], base_phi, *joint_angles]
 
     def get_q_from_sim_pos(self) -> List:
+        """ Get the pose of the holonomic base [x,y,phi] using dq reference frame(self.youbot_base_ref )
+        and joint positions of the arm.
+        :return: base pose and arm joint position as list [x,y,phi,th0,th1,th2,th3,th4]
+        """
+
         # Get the adjusted pose of the holonomic base
-        # [x,y,phi])
         base_x = self.get_object_pose(
             self.youbot_base_pyrep) * self.adjust_pose
         base_t = vec4(translation(base_x))
@@ -106,14 +121,23 @@ class YouBotModel(BaseCommunication):
 
     @property
     def Kinematics(self):
+        """ Get the kinematic model of the YouBot mobile manipulator.
+        :return: kinematic model of the YouBot mobile manipulator
+        """
         return self.youbot_kinematic
 
     @property
     def BaseKinematics(self):
+        """ Get the kinematic model of the holonomic base.
+        :return: kinematic model of the holonomic base
+        """
         return self.youbot_kinematic.get_chain_as_holonomic_base(0)
 
     @property
     def ArmKinematics(self):
+        """ Get the kinematic model of the arm.
+        :return: kinematic model of the arm
+        """
         return self.youbot_kinematic.get_chain_as_serial_manipulator_dh(1)
 
     def send_velocities(self, velocities: List) -> None:
