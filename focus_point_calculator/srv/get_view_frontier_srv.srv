@@ -1,0 +1,4 @@
+float32[] pose
+bool run_parallel
+---
+int32[] frontier_indices

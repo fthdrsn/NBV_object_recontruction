@@ -1,4 +1,6 @@
 string ig_method
 float32[] view_list
+bool run_parallel
 ---
 float32[] view_igs
+float32 elapsed_time

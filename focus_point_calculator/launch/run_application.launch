@@ -6,6 +6,6 @@
   <node name="focus_point_node" pkg="focus_point_calculator" type="focus_point_calculator_node" clear_params="true" output="screen"/>
 
   <rosparam command="load" file="$(find focus_point_calculator)/config/focus_point_params.yaml" />
- 
+
 </launch>
 

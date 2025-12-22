@@ -21,8 +21,13 @@ struct Params
 
   double focus_point_r;
   
+  int frontier_neighbor_expansion;  // Radius for neighbor expansion (0=no expansion, 1=26 neighbors, 2=124 neighbors)
+  
   std::vector<double> boundary_min;
   std::vector<double> boundary_max;
+
+  bool use_low_res;
+  double low_res_cell_size;
 
 };
 

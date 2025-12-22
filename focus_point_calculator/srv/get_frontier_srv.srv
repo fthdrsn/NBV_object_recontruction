@@ -1,0 +1,3 @@
+bool run_parallel
+---
+float32[] frontier_xyz

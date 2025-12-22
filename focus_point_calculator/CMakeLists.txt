@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
     octomap_rviz_plugins  
     )
 find_package(octomap REQUIRED)
+find_package(OpenMP REQUIRED)
 
 
 
@@ -68,7 +69,11 @@ find_package(octomap REQUIRED)
    coverage_srv.srv
    focus_point_srv.srv
    view_evaluate_srv.srv
- )
+   save_octomap_srv.srv
+   get_frontier_srv.srv
+   get_view_frontier_srv.srv
+   stop_octomap_update_srv.srv
+    )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -172,8 +177,8 @@ target_link_libraries(
    ${catkin_LIBRARIES}
    ${OCTOMAP_LIBRARIES}
    dqrobotics
+   OpenMP::OpenMP_CXX
  )
-
 
 #############
 ## Install ##
