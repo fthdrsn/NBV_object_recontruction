@@ -18,7 +18,12 @@ import json
 
 
 class ManageData:
+    """Class to manage object data for reconstruction tasks.
+    This class handles loading object names, paths, ground truth data, and candidate views.
+    It also provides methods to save results and manipulate the object list."""
+
     def __init__(self):
+        # TODO: get the paths from a config file
         self.data_root_path = "/media/fth/T9/ResultsWithPyRep"
         self.mesh_path = "/media/fth/T9/UpdatedCodeData/MeshData"
         self.gt_path = self.data_root_path+"/GtPclData"
@@ -26,9 +31,9 @@ class ManageData:
         self.result_save_path = self.data_root_path + "/Results_Parallel"
         self.candidate_views_txt = self.data_root_path + \
             "/ViewSpace/sample_space_up_down.txt"
-        self.object_name_list = []
-        self.object_mesh_path_list = []
-        self.object_gt_path_list = []
+        self.object_name_list = []  # Stores object names
+        self.object_mesh_path_list = []  # Stores full paths to object meshes
+        self.object_gt_path_list = []  # Stores full paths to object ground truth pcl data
         self.load_object_list()
 
     def load_object_list(self):
@@ -47,6 +52,7 @@ class ManageData:
                     self.object_mesh_path_list.append(
                         self.mesh_path+"/"+obj)
                     self.object_gt_path_list.append(self.gt_path+"/"+obj)
+
         except FileNotFoundError:
             # file may not exist yet; start with empty lists
             self.object_name_list = []
@@ -54,6 +60,7 @@ class ManageData:
             self.object_gt_path_list = []
 
     def get_candidate_views(self):
+        """Return candidate views as an Nx7 numpy array."""
 
         return np.loadtxt(self.candidate_views_txt)
 
@@ -119,7 +126,8 @@ class ManageData:
         self.object_name_list = []
         self.object_full_path_list = []
 
-    def get_object_mesh(self, index):
+    def get_object_list(self, index):
+        """Return (name, full_path) for object at `index`."""
         return self.object_name_list[index], self.object_full_path_list[index]
 
     def length_object_list(self):

@@ -1,22 +1,11 @@
-# Standard library imports
-import dis
-import sys
-from os.path import abspath, dirname
-from turtle import right
-
-# Third-party imports
 import numpy as np
 from dqrobotics import *
-from dqrobotics.robot_modeling import DQ_HolonomicBase
-from dqrobotics.utils import DQ_Geometry
-
-# Local package imports
 from QP import DQ_QuadprogSolver_Custom
 from Robots.utils import *
 
 
 class RobotController:
-    """Controller for a holonomic robot with visibility, velocity limit, collision avoidance, and circulation constraints."""
+    """Controller for a mobile manipulator robot with visibility, velocity limit, collision avoidance, joint position and circulation constraints."""
 
     def __init__(self, params):
         self.robot_dim = 0.7
@@ -37,11 +26,12 @@ class RobotController:
     def compute_one_step_u(self, target_pose_dq, robot_q, obs_pose_list, obs_radius_list, focus_point=[0, 0, 0], circulation_dir=1, method="NOPATH"):
         """Compute the control signal for one time step given the target, robot state, and obstacles.
         Args:
-             target (dict): Target pose with keys 'position' (list of x, y) and 'phi' (orientation in radians).
-             robot (dict): Robot state with keys 'position' (list of x, y), 'phi' (orientation in radians), and 'radius' (float).
-             obs_dic (list): List of obstacle dictionaries, each with keys depending on the type ('circle' or 'polygon').
-             focus_point (list): The point [x, y] that should remain visible to the robot.
-             circulation_dir (float or None): Direction for circulation constraint; if None, use default.
+             target_pose_dq: Target pose as dual quaternion.
+             robot_q: Robot joint configuration.
+             obs_pose_list (list): List of obstacle poses.
+             obs_radius_list (list): List of obstacle radii.
+             focus_point (list): The point [x, y, z] that should remain visible to the robot.
+             circulation_dir (float): Direction for circulation constraint
         Returns:
              u (np.array): Control signal [vx, vy, omega].
              const_dic (dict): Dictionary of active constraints with their Jacobians and bounds.
@@ -162,7 +152,7 @@ class RobotController:
         Args:
              col_J (np.array): Collision avoidance constraint Jacobian.
              col_b (np.array): Collision avoidance constraint bounds.
-             circulation_dir (float or None): Direction for circulation constraint; if None, use default.
+             circulation_dir (float): Direction for circulation constraint
         Returns:
              J_c (np.array): Circulation constraint Jacobian.
              b_c (float): Circulation constraint bound.
@@ -182,10 +172,11 @@ class RobotController:
         return (J_c, b_c)
 
     def collision_avoidance_constraint_base(self, obs_pose_list, obs_radius_list, robot_q):
-        """Compute the collision avoidance constraint based on obstacles and robot state.
+        """Compute the collision avoidance constraint for the robot base using obstacles and robot state.
         Args:
-             obs_dic (list): List of obstacle dictionaries, each with keys depending on the type ('circle' or 'polygon').
-             robot (dict): Robot state with keys 'position' (list of x, y), 'phi' (orientation in radians), and 'radius' (float).
+             obs_pose_list: List of obstacle poses.
+             obs_radius_list: List of obstacle radii.
+             robot_q: Robot joint configuration.
         Returns:
              J_col (np.array): Collision avoidance constraint Jacobian.
              b_col (np.array): Collision avoidance constraint bounds.
@@ -203,6 +194,13 @@ class RobotController:
         return (-softmin_J_base, np.array([softmin_b_base]))
 
     def eef_collision_avoidance_constraint(self, robot_q):
+        """Compute the collision avoidance constraint for the robot end effector and the search space cylinder using robot state.
+        Args:
+             robot_q: Robot joint configuration.
+        Returns:
+             J_eef (np.array): End effector collision avoidance constraint Jacobian.
+             b_eef (np.array): End effector collision avoidance constraint bounds.
+        """
         cylinder_dq = pose_to_line(DQ([1]), k_)
         pose_ = self.robot_model.Kinematics.fkm(robot_q)
         tra_J = self.robot_model.Kinematics.translation_jacobian(
@@ -216,7 +214,14 @@ class RobotController:
         return (-J_eef, np.array([b_eef]))
 
     def eef_up_down_limit_constraint(self, robot_q):
-        # If the not path strategy is used, the robot might move to unsafe positions.
+        """Compute the end effector up and down limit constraint using robot state.
+        Args:
+             robot_q: Robot joint configuration.
+        Returns:
+             J_eef_plane (np.array): End effector up and down limit constraint Jacobian.
+             b_eef_plane (np.array): End effector up and down limit constraint bounds.
+        """
+        # If the nopath strategy is used, the robot might move to unsafe positions.
         # Thus, we limit the maximum and minimum height
         plane_pose_ = 1+0.5*E_*0.25*k_
         plane_ = pose_to_plane(plane_pose_, k_)
@@ -275,6 +280,16 @@ class RobotController:
         return (J_limit_angle, b_limit_angle)
 
     def visibility_constraint(self, robot_q, vis_target_position):
+        """Compute the visibility constraint based on robot state and the visibility target point.
+        Args:
+             robot_q: Robot joint configuration.
+             vis_target_position: The point [x, y, z] that should remain visible to the robot.
+        Returns:
+             J_visibility (np.array): Visibility constraint Jacobian.
+             b_visibility (np.array): Visibility constraint bounds.
+        """
+        # Visibility constraint ensure that the given vis_target_position stays within the camera frustum by
+        # representing the frustum by the four planes and enforcing constraint between the planes and the point.
 
         # Calculate the pose of the planes w.r.t world frame, and their plane jacobians
         left_plane_pose, left_plane_J = calculate_plane_jacobian(

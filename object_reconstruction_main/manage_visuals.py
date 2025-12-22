@@ -28,10 +28,6 @@ class ManageVisuals:
             "sampling_best_view_frame")
         self.focus_point_visual = PyRepObj.Object.get_object("focus_point")
 
-        # self.bbx_handle = PyRepObj.Object.get_object("bbx")
-        # self.search_space_handle = PyRepObj.Object.get_object("search_space")
-       # self.collision_cylinder_handle = PyRepObj.Object.get_object(
-        #    "collision_cylinder")
         self.obs_handle_list = []
         self.rrt_paths_handle_list = []
         self.rrt_shortest_path_handle_list = []
@@ -170,6 +166,7 @@ class ManageVisuals:
         return plane_left_pose, plane_right_pose, plane_top_pose, plane_bottom_pose
 
     def create_shape_visual(self, mesh_path, pose_dq, scale):
+        """ Create a shape visual in the CoppeliaSim simulation from a given mesh path, pose and scale """
 
         rec_obj_ref = Shape.import_mesh(
             mesh_path+"/model.obj", scaling_factor=scale, ignore_up_vector=True)
