@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(focus_point_calculator)
+project(orac_octomap_operations)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -16,9 +16,11 @@ find_package(catkin REQUIRED COMPONENTS
     octomap_msgs
     octomap_server
     octomap_rviz_plugins  
+    orac_reconstruction_services
     )
 find_package(octomap REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 
 
@@ -64,16 +66,9 @@ find_package(OpenMP REQUIRED)
 # )
 
 ## Generate services in the 'srv' folder
- add_service_files(
-   FILES
-   coverage_srv.srv
-   focus_point_srv.srv
-   view_evaluate_srv.srv
-   save_octomap_srv.srv
-   get_frontier_srv.srv
-   get_view_frontier_srv.srv
-   stop_octomap_update_srv.srv
-    )
+ ##add_service_files(
+ ##  FILES
+ ##   )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -118,14 +113,16 @@ find_package(OpenMP REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-#  LIBRARIES octo
- # CATKIN_DEPENDS  roscpp
- #                 std_msgs
- #                 geometry_msgs
- ##                 octomap_msgs
- #                 octomap_server
- #                 octomap_rviz_plugins
-#  DEPENDS system_lib
+  CATKIN_DEPENDS
+    roscpp
+    std_msgs
+    sensor_msgs
+    geometry_msgs
+    message_runtime
+    octomap_msgs
+    octomap_server
+    octomap_rviz_plugins
+    orac_reconstruction_services
 )
 
 ###########
@@ -138,6 +135,7 @@ include_directories(
  include
  ${catkin_INCLUDE_DIRS}
  ${OCTOMAP_INCLUDE_DIRS}
+ ${EIGEN3_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -166,7 +164,13 @@ include_directories(
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(${PROJECT_NAME}_node
-src/focus_point/focus_point_node.cpp src/focus_point/focus_point.cpp src/focus_point/param.cpp 
+src/octomap_operations/orac_main_node.cpp 
+src/octomap_operations/orac_main.cpp 
+src/octomap_operations/orac_ig_methods.cpp
+src/octomap_operations/orac_focus_point.cpp
+src/octomap_operations/orac_frontiers.cpp
+src/octomap_operations/orac_utils.cpp
+src/octomap_operations/param.cpp 
 )
 
 
@@ -176,7 +180,6 @@ target_link_libraries(
    ${PROJECT_NAME}_node
    ${catkin_LIBRARIES}
    ${OCTOMAP_LIBRARIES}
-   dqrobotics
    OpenMP::OpenMP_CXX
  )
 

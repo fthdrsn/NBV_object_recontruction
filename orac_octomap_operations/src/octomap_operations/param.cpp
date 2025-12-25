@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 
-#include <focus_point/param.h>
+#include <octomap_operations/param.h>
 
 
 Params readParams()

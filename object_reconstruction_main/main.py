@@ -11,7 +11,8 @@ from Robots.Communication import BaseCommunication
 from Robots.utils import *
 import yaml
 from manage_data import ManageData
-from focus_point_calculator.srv import focus_point_srv, focus_point_srvRequest, coverage_srv, view_evaluate_srv, view_evaluate_srvRequest, save_octomap_srv, save_octomap_srvRequest
+from orac_reconstruction_services.srv import focus_point_srv, focus_point_srvRequest, coverage_srv, \
+    view_evaluate_srv, view_evaluate_srvRequest, save_octomap_srv, save_octomap_srvRequest
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from random_env_generator import RandomEnv
@@ -62,7 +63,7 @@ class MainClass():
         self.run_planner()
 
     def set_camera_params(self):
-        """ Set the depth camera parameters in CoppeliaSim based on CameraParameters. """
+        """ Set the depth camera parameters in CoppeliaSim based on the ROS parameters. """
         res = [self.params["CameraParameters"]["imWidth"],
                self.params["CameraParameters"]["imHeight"]]
         persp_angle = self.params["CameraParameters"]["camFov"]
@@ -86,12 +87,6 @@ class MainClass():
         return (closest_idx, dists[closest_idx])
 
     def initiate_new_object(self, object_index=0):
-        """ Initiate a new object in the simulation by loading its ground truth data and visual.
-        Args:
-            object_index (int, optional): The index of the object to load. Defaults to 0.
-        """
-
-        # If it is activated, generate a new random environment with obstacles
         self.robot_initial_base_q = self.robot_model.get_q_from_sim()[:2]
         if self.params["NBV"]["includeObstacles"]:
             self.obs_info_dic = self.rand_env_gen.generate_random_env(
@@ -110,34 +105,29 @@ class MainClass():
         self.visual_manager.show_obstacles(
             self.obs_pose_list_dq, self.obs_rad_list)  # Show the obstacles in CoppeliaSim
 
-        # Load the ground truth pcl and pose data
+        # Load the object data
         self.gt_pose, self.gt_pcl = self.data_manager.get_gt_data(
-            object_index)
+            object_index)  # Groundtruth Point cloud and pose
         self.mesh_path = self.data_manager.get_mesh_path(object_index)
-
         # Create the object visual in CoppeliaSim
         self.object_mesh_handle = self.visual_manager.create_shape_visual(
             self.mesh_path, DQ(self.gt_pose), scale=5.8)
         self.pr.step()
+        # time.sleep(1)  # Wait for a second to ensure everything is stable
 
     def initiate_new_iteration(self, object_index):
-        """ Initiate a new iteration for the given object index.
-        Args:
-            object_index (int): The index of the object to load.
-        """
         # Refresh the simulation to reset the robot pose to its initial position
         self.pr.stop()
         self.pr.start()
         # First bring up the object shape to the scene and load related gt data
         self.initiate_new_object(object_index)
-
         # For each method, we do following operations:
-        # Launch a new ROS session to reset octomap and related operations
-        self.launch_ros_session()
+        self.launch_ros_session()  # Launch a new ROS session to reset octomap and related stuff
 
+        # Wait for a second to ensure everything is stable
         # Reset the remaining views
         self.remaining_views = deepcopy(self.candidate_views)
-        # Reset the ground truth remaining point cloud (reload full pcl as remaining pcl)
+        # Reset the ground truth remaining point cloud
         self.gt_pcl_remaining = deepcopy(self.gt_pcl)
         self.current_partial_pcl = np.empty((0, 3))
 
@@ -153,15 +143,13 @@ class MainClass():
         self.robot_path_length_for_all_nbvs = []
         self.termination_reason_for_all_nbvs = []
         self.iteration_counter_for_all_nbvs = []
-
-        # Variables related only to focus point method
+        # Related only focus point method
         self.total_focus_time_for_all_nbvs = []
         self.total_focus_calculations_for_all_nbvs = []
 
-        # Variables related only to sampling method
+        # Related only sampling method
         self.total_view_evaluation_time_for_all_nbvs = []
         self.total_num_of_view_evaluations_for_all_nbvs = []
-
         for _ in range(40):
             self.pr.step()  # Step the simulation to ensure visuals are updated
         time.sleep(5)  # Wait for a second to ensure everything is stable
@@ -171,7 +159,7 @@ class MainClass():
         Args:
             filename (str): The name of the file to save the octomap to.
         """
-
+        """Save the partial model data for the object, method and nbv_index to results folder."""
         result_save_path = self.data_manager.result_save_path
         object_name_list = self.data_manager.get_object_name_list()
 
@@ -192,8 +180,8 @@ class MainClass():
             print(f"Error in saving octomap: {e}")
 
     def run_planner(self):
-        """Run the NBV planner for all objects and methods. This is the main loop that iterates through objects and methods."""
-        for object_index in range(0, self.data_manager.length_object_list(), 1):
+        """Run the NBV planner for all objects and methods."""
+        for object_index in range(2, self.data_manager.length_object_list(), 2):
 
             for method in ["FOCUS", "SAMPLING", "NOPATH"]:
                 self.initiate_new_iteration(object_index)
@@ -229,11 +217,14 @@ class MainClass():
                 self.save_current_octomap(object_index, method, 0)
 
                 for nbv_cntr in range(self.params["NBV"]["maxNBVCalls"]):
+                    cam_res, cam_fovs, near_clip, far_clip = self.visual_manager.get_depth_camera_parameters()
+                    print(
+                        f"Camera Resolution: {cam_res}, FOVs: {cam_fovs}, clip planes: {near_clip}, {far_clip}    ")
 
-                    # Estimate the next best view using RSV method. You can run_parallel=True to speed up the
-                    # calculation by paralelizing the IG calculations for the views.
+                    # Estimate the next best view using RSV method
+
                     max_ig, nbv_np, best_view_idx, time_for_nbv_calculation = self.evaluate_candidate_views(
-                        candidate_views=self.remaining_views, ig_method="RSV", run_parallel=True)
+                        candidate_views=self.remaining_views, ig_method="RSV", run_parallel=self.params["NBV"]["parallelComputationEnabled"])
 
                     # Delete the best view for the next iteration to avoid evaluating it again
                     self.remaining_views = np.delete(
@@ -246,13 +237,9 @@ class MainClass():
                                         nbv_np[5]*j_+nbv_np[6]*k_)
                     nbv_pose_dq = (nbv_ori+0.5*E_*nbv_position*nbv_ori)
                     self.visual_manager.set_nbv_frame_pose(nbv_pose_dq)
-
-                    # Before moving, determine circulation direction based on closest obstacle.
-                    # Note that this is meaningful only when obstacles are present.
-
+                    # Before moving, determine circulation direction based on closest obstacle
                     nbv_initial_q = self.robot_model.get_q_from_sim()
-                    # Determine circulation direction based on initial position and NBV positions. It ensures that the robot circulates in
-                    # outward direction around the closest obstacle.
+                    # Determine circulation direction based on initial position and NBV positions
                     circ_dir = 1 if cross_product_2d(
                         nbv_np[:2], nbv_initial_q[:2]) > 0 else -1
 
@@ -283,8 +270,7 @@ class MainClass():
                     result_dic_for_nbv["time_for_nbv_calculation"] = time_for_nbv_calculation
                     result_dic_for_nbv["time_for_robot_motion"] = time_for_robot_motion
                     result_dic_for_nbv["max_ig"] = max_ig
-
-                    # Add to the method result list. We manipulate many lists here to store per NBV results for each method
+                    # Add to the method result list
                     self.coverage_for_all_nbvs.append(total_coverage)
                     self.chamfer_distance_for_all_nbvs.append(chamfer_distance)
                     self.entropy_for_all_nbvs.append(
@@ -303,36 +289,27 @@ class MainClass():
                         result_dic_for_nbv["iteration_counter"])
 
                     if method == "FOCUS":
-                        # If the method is focus, store focus point related data which is not relevant for other methods
                         self.total_focus_time_for_all_nbvs.append(
                             np.array(result_dic_for_nbv["focus_evaluation_times"]).sum())
                         self.total_focus_calculations_for_all_nbvs.append(
                             result_dic_for_nbv["num_of_focus_calculations"])
-
                     if method == "SAMPLING":
-                        # If the method is sampling, store sampling related data which is not relevant for other methods
                         self.total_view_evaluation_time_for_all_nbvs.append(
                             np.array(result_dic_for_nbv["view_evaluation_times"]).sum())
                         self.total_num_of_view_evaluations_for_all_nbvs.append(
                             result_dic_for_nbv["num_of_view_evaluations"])
-                    # Save the per NBV result as nbv_{nbv_index+1}.json
+
                     self.data_manager.save_nbv_result(
                         object_index, (nbv_cntr+1), result_dic_for_nbv, method)
-                    # Save the current partial model pcl
                     self.data_manager.save_partial_model_data(
                         object_index, (nbv_cntr+1), self.current_partial_pcl, method)
-                    # Save the current partial octomap
                     self.save_current_octomap(
                         object_index, method, (nbv_cntr+1))
 
-                # After all NBV iterations are done for the method, calculate area under curve for coverage.
-                # This gives an idea about how quickly the method was able to cover the object surface.
-                # The value is between 0 and 1.
                 auc_final_for_method = calculate_area_under_curve(np.arange(len(self.coverage_for_all_nbvs)),
                                                                   self.coverage_for_all_nbvs,
                                                                   x_max=self.params["NBV"]["maxNBVCalls"]+1,
                                                                   y_max=1.0)
-                # After the robot visits all NBVs for the method, save a summary of the results
                 summary_result_dic = {
                     "SUMMARY":
                     {
@@ -360,7 +337,6 @@ class MainClass():
                     }
                 }
                 if method == "FOCUS":
-                    # If the method is focus, store focus point related data which is not relevant for other methods
                     summary_result_dic["SUMMARY"]["total_focus_time_for_method"] = np.sum(np.array(
                         self.total_focus_time_for_all_nbvs))
                     summary_result_dic["EACH_NBV"]["total_focus_time_for_all_nbvs"] = self.total_focus_time_for_all_nbvs
@@ -370,7 +346,6 @@ class MainClass():
                     summary_result_dic["EACH_NBV"]["total_focus_calculations_for_all_nbvs"] = self.total_focus_calculations_for_all_nbvs
 
                 if method == "SAMPLING":
-                    # If the method is sampling, store sampling related data which is not relevant for other methods
                     summary_result_dic["SUMMARY"]["total_view_evaluation_time_for_method"] = np.sum(np.array(
                         self.total_view_evaluation_time_for_all_nbvs))
                     summary_result_dic["EACH_NBV"]["total_view_evaluation_time_for_all_nbvs"] = self.total_view_evaluation_time_for_all_nbvs
@@ -379,10 +354,8 @@ class MainClass():
                         self.total_num_of_view_evaluations_for_all_nbvs)))
                     summary_result_dic["EACH_NBV"]["total_view_evaluations_for_all_nbvs"] = self.total_num_of_view_evaluations_for_all_nbvs
 
-                # Finally save the summary result
                 self.data_manager.save_nbv_result(
                     object_index, "summary", summary_result_dic, method)
-
                 # Remove the previous object mesh from coppeliasim for next object
                 self.object_mesh_handle.remove
                 self.pr.step()
@@ -391,13 +364,8 @@ class MainClass():
                 time.sleep(1)
 
     def move_to_NBV_no_path(self, nbv_pose_dq, circ_dir=1):
-        """ Move the robot to the NBV using no-path strategy. The only goal of the robot is to reach the NBV without any visibility
-        constraint or path planning.
-        Args:
-            nbv_pose_dq (DQ): The desired NBV pose as a dual quaternion.
-            circ_dir (int, optional): The circulation direction around obstacles. 
-        """
 
+        vis_target_position = np.array([0, 0, 0])
         stability_count = 0
         prev_task_err_norm = float('inf')
         task_err_norm = float('inf')
@@ -409,23 +377,18 @@ class MainClass():
         is_high_curvature = False
         is_stability_error = False
         total_controller_time = 0.0
-
-        # Use a loop to move the robot toward the NBV until the task space error norm is below the tolerance
         while task_err_norm > self.params["ControllerSettings"]["errorTolerance"]:
             iteration_counter += 1
-            # get the current robot configuration(x,y,theta,joint1,...,joint5)
             robot_q = self.robot_model.get_q_from_sim()
 
-            controller_start_time = time.time()  # We record the controller time
-            # Disable visibility constraint
+            controller_start_time = time.time()
             self.robot_controller.constraint_switches["enableVisibilityConst"] = False
             u, _, _ = self.robot_controller.compute_one_step_u(nbv_pose_dq, robot_q, self.obs_pose_list_dq, self.obs_rad_list,
-                                                               focus_point=np.array([0, 0, 0]), circulation_dir=circ_dir, method="NOPATH")
+                                                               focus_point=vis_target_position, circulation_dir=circ_dir, method="NOPATH")
             controller_end_time = time.time()
             controller_duration = controller_end_time - controller_start_time
             total_controller_time += controller_duration
-
-            # The generated velocities are in the world frame, we need to convert the base velocities to the robot frame.
+            # Convert base velocities to robot frame
             base_phi = robot_q[2]
             rot_mat = np.array([[math.cos(base_phi), math.sin(base_phi), 0],
                                 [-math.sin(base_phi),
@@ -442,14 +405,10 @@ class MainClass():
 
             q_to_check = self.robot_model.get_q_from_sim()
             robot_path_list.append(q_to_check[:2])
-
             # Check if the robot did not make significant progress which help detect local minima
             transition_err_norm, direction_err_norm, task_err_norm = self.calculate_error_norms(
                 robot_q, nbv_pose_dq)
             curvature = 0
-            # Culvature check help detect if the robot is stuck by doing back and forth motions
-            # Currently it is under development and not fully functional. It is not used in the simulations in the paper.
-            # It helps to stop the robot if it is doing high oscillatory motions without making significant progress toward the goal.
             if self.params["ControllerSettings"]["includeCurvatureCheck"]:
                 # Check position error norm to see if we are close enough to the target
 
@@ -469,8 +428,6 @@ class MainClass():
                             f"High curvature {curvature}")
                         is_high_curvature = True
                         break
-            # Stability check to see if the robot is making progress toward the goal
-
             if self.params["ControllerSettings"]["includeStabilityCheck"]:
                 task_err_norm_change = abs(prev_task_err_norm - task_err_norm)
                 if task_err_norm_change < self.params["ControllerSettings"]["stabilityThreshold"]:
@@ -485,8 +442,6 @@ class MainClass():
                     break
 
             prev_task_err_norm = task_err_norm
-
-        # Stop the robot after reaching the NBV or termination
         self.robot_model.send_velocities(np.zeros(8))
         self.pr.step()
         termination_reason = ""
@@ -496,8 +451,6 @@ class MainClass():
             termination_reason = TerminationReason.HIGH_CURVATURE
         else:
             termination_reason = TerminationReason.STABILITY_ERROR
-
-        # Calculate the robot path length
         diffs = np.diff(np.array(robot_path_list), axis=0)
         path_length = np.linalg.norm(
             diffs, axis=1).sum() if diffs.size else 0.0
@@ -509,23 +462,20 @@ class MainClass():
                       "average_controller_time": total_controller_time / max(1, iteration_counter),
                       "total_controller_time": total_controller_time,
                       "robot_path_length": path_length}
+
+        print(f"Result Dic: {result_dic}")
         return result_dic
 
     def move_to_NBV_focus_point(self, nbv_pose_dq, nbv_initial_q, circ_dir=1):
-        """ Move the robot to the NBV using focus point based controller. It is our method to reach the NBV while keeping a focus point in view.
-        This enables the object reconstruction aware whole-body control. 
+        """ Move the robot to the NBV using focus point based controller. 
 
         Args:
             nbv_pose_dq (DQ): The desired NBV pose as a dual quaternion.
             nbv_initial_q (np.ndarray): The initial joint configuration of the robot.
-            circ_dir (int): The circulation direction around obstacles."""
+            circ_dir (int, optional): The circulation direction around obstacles. Defaults to 1."""
 
-        # We always keep track of the previous end-effector position to determine if we need to recalculate the focus point
-        # prev_eef_position refers to the position where the focus point was last calculated
-        # we calculate a focus point at the start so include the initial position as prev_eef_position
         prev_eef_position = vec3(translation(
             self.robot_model.Kinematics.fkm(nbv_initial_q)))
-
         vis_target_position = np.array([0, 0, 0])
         stability_count = 0
         prev_task_err_norm = float('inf')
@@ -566,7 +516,7 @@ class MainClass():
                 try:
                     focus_req = focus_point_srvRequest()
                     focus_req.pose = focus_point_request_np
-                    focus_req.run_parallel = True
+                    focus_req.run_parallel = self.params["NBV"]["parallelComputationEnabled"]
                     response = self.focus_pnt_func(focus_req)
                     vis_target_position = np.array(response.focus_pnt)
                     focus_point_calculation_time = response.elapsed_time/1000.0  # Convert to seconds
@@ -578,7 +528,7 @@ class MainClass():
                 focus_time_list.append(focus_point_calculation_time)
                 num_of_focus_calculations += 1
 
-                prev_eef_position = current_eef_position  # update the previous eef position
+                prev_eef_position = current_eef_position
                 self.visual_manager.set_focus_point_position(
                     vis_target_position)
 
@@ -618,9 +568,6 @@ class MainClass():
                 robot_q, nbv_pose_dq)
 
             # Check position error norm to see if we are close enough to the target
-            # Culvature check help detect if the robot is stuck by doing back and forth motions
-            # Currently it is under development and not fully functional. It is not used in the simulations in the paper.
-            # It helps to stop the robot if it is doing high oscillatory motions without making significant progress toward the goal.
             curvature = 0
             if self.params["ControllerSettings"]["includeCurvatureCheck"]:
                 if transition_err_norm > 0.2:
@@ -639,7 +586,6 @@ class MainClass():
                             f"High curvature {curvature}")
                         is_high_curvature = True
                         break
-
             # If the error norm is not decreasing significantly over time, we assume the controller has stabilized before reaching the target
             if self.params["ControllerSettings"]["includeStabilityCheck"]:
                 task_err_norm_change = abs(prev_task_err_norm - task_err_norm)
@@ -685,21 +631,13 @@ class MainClass():
         return result_dic
 
     def move_to_NBV_sampling(self, nbv_pose_dq, circ_dir=1, show_rrt_paths=False):
-        """ Move the robot to the NBV using sampling strategy. The robot first plans a path to the NBV using RRT* algorithm
-        and then candidate views are sampled and evaluated around each node.
-        Args:
-            nbv_pose_dq (DQ): The desired NBV pose as a dual quaternion.
-            circ_dir (int): The circulation direction around obstacles.
-            show_rrt_paths (bool): Whether to visualize the RRT* paths in CoppeliaSim.
-        Returns:
-            dict: A dictionary containing various metrics and results from the movement to the NBV.
-        """
 
+        # Keep trying to find a proper path until it finds one
         robot_q = self.robot_model.get_q_from_sim()
         current_eef_pose_dq = self.robot_model.Kinematics.fkm(robot_q)
         current_position = vec3(translation(current_eef_pose_dq))
         nbv_position_np = vec3(translation(nbv_pose_dq))
-        # Keep trying to find a proper path until it finds one or exceeds maximum attempts
+
         is_plan_found = False
         rrt_fail_count = 0
         rrt_start_time = time.time()
@@ -739,7 +677,6 @@ class MainClass():
         rrt_path_np = np.array(rrt_path_np)[::-1]
         num_view_evaluations = 0
 
-        # Initialize lists to store per view metrics
         eval_time_for_all_views = []
         controller_times_for_all_views = []
         max_ig_for_all_views = []
@@ -759,7 +696,7 @@ class MainClass():
                 time_for_view_evaluation = 0.0
             else:
                 path_node = rrt_path_np[node_idx]
-                # Sample views around the node
+                # Sample 10 views around the node
                 sphere_sample_list = ipp.sample_in_sphere(
                     path_node)
                 if show_rrt_paths:
@@ -774,10 +711,11 @@ class MainClass():
 
                 # Evaluate the sampled views using ENT method
                 max_ig, best_view_sampling, best_view_idx_sampling, time_for_view_evaluation = self.evaluate_candidate_views(
-                    np.array(view_list_srv), ig_method="ENT", run_parallel=True)
+                    np.array(view_list_srv), ig_method="ENT", run_parallel=self.params["NBV"]["parallelComputationEnabled"])
 
                 num_view_evaluations += 1
-                # Convert the best view to dual quaternion pose
+                # Move to the best view around the path node
+                # Convert NBV to dq pose
                 sampling_view_position = best_view_sampling[0]*i_ + \
                     best_view_sampling[1]*j_+best_view_sampling[2]*k_
                 sampling_view_ori = normalize(best_view_sampling[3]+best_view_sampling[4]*i_ +
@@ -799,8 +737,6 @@ class MainClass():
             is_stability_error = False
             total_controller_time = 0.0
             view_motion_start_time = time.time()
-            # Move the robot toward the sampled view using the controller
-            # Disable visibility constraint since there is no focus point here
             self.robot_controller.constraint_switches["enableVisibilityConst"] = False
             while task_err_norm > self.params["ControllerSettings"]["errorTolerance"]:
                 iteration_counter += 1
@@ -879,7 +815,6 @@ class MainClass():
                 termination_reason = TerminationReason.HIGH_CURVATURE
             else:
                 termination_reason = TerminationReason.STABILITY_ERROR
-
             # Store data for each view motion until reaching the NBV
             eval_time_for_all_views.append(time_for_view_evaluation)
             max_ig_for_all_views.append(max_ig)
@@ -895,7 +830,7 @@ class MainClass():
             path_length = np.linalg.norm(
                 diffs, axis=1).sum() if diffs.size else 0.0
             path_length_for_all_views.append(path_length)
-        # General information about the whole movement to the NBV, similar to previous methods
+
         result_dic = {"iteration_counter": int(np.array(iteration_count_for_all_views).sum()),
                       "termination_reason": termination_reasons_for_all_views[-1],
                       "curvature": curvature_for_all_views[-1],
@@ -908,7 +843,7 @@ class MainClass():
                       "robot_path_length": np.array(path_length_for_all_views).sum(),
                       "rrt_planning_time": time_for_rrt_planning,
 
-                      # Detailed information for each view motion toward the NBV
+
                       "details_for_views": {
                           "max_ig_list": max_ig_for_all_views,
                           "view_motion_time_list": robot_motion_time_for_all_views,
@@ -925,12 +860,7 @@ class MainClass():
         return result_dic
 
     def calculate_error_norms(self, robot_q, target_pose_dq):
-        """ Get the current task space error norm between the robot end effector and the target pose 
-        Args:
-            robot_q (np.ndarray): The current robot joint configuration.
-            target_pose_dq (DQ): The desired target pose as a dual quaternion.
-        Returns:
-            tuple: A tuple containing the translation error norm, direction error norm, and overall task error"""
+        """ Get the current error norm between the robot end effector and the target pose """
 
         # Check if the robot did not make significant progress which help detect local minima
         updated_pose_dq = self.robot_model.Kinematics.fkm(
@@ -949,14 +879,7 @@ class MainClass():
         return transition_err_norm, direction_err_norm, task_err_norm
 
     def evaluate_candidate_views(self, candidate_views=None, ig_method="RSV", run_parallel=True):
-        """ Calculate the next best view (NBV) based on information gain (IG) evaluation
-        Args:
-            candidate_views (np.ndarray): The candidate views to evaluate as Nx7 numpy array.
-            ig_method (str): The information gain method to use ("RSV" or "ENT").
-            run_parallel (bool): Whether to run the evaluation in parallel.
-        Returns:
-            tuple: A tuple containing the maximum information gain, best view, best view index, and evaluation time.
-        """
+        """ Calculate the next best view (NBV) based on information gain (IG) evaluation and remove it from the remaining views list """
         try:
 
             nbv_req = candidate_views.flatten()
@@ -980,15 +903,10 @@ class MainClass():
         return max_ig, best_view, best_view_idx, views_eval_time
 
     def calculate_coverage(self, total_coverage=0.0):
-        """ Get the current surface coverage of the object based on the generated point cloud from octomap 
-        Args:
-            total_coverage (float): The total coverage accumulated so far.
-        Returns:
-            tuple: A tuple containing the total coverage and chamfer distance.
-        """
-        # Read the generated point cloud so far from octomap
+        """ Get the current surface coverage of the object based on the generated point cloud from octomap """
+        # Calculate surface coverage
         ros_point_cloud = rospy.wait_for_message(
-            "/octomap_point_cloud_centers", PointCloud2)
+            "/octomap_server_fine/octomap_point_cloud_centers", PointCloud2)
         gen = pc2.read_points(ros_point_cloud, skip_nans=True)
         int_data = list(gen)
         xyz = []
@@ -1012,10 +930,6 @@ class MainClass():
         return total_coverage, chamfer_distance
 
     def calculate_entropy(self):
-        """ Get the current entropy, covered volume and the number of unknown, occupied, free voxels from octomap
-        Returns:
-            dict: A dictionary containing entropy, covered volume and the number of unknown, occupied, free voxels.
-        """
         response = self.coverage_func()
         result_dic = {"entropy": response.ent,
                       "unknown": response.unknown,

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>focus_point_calculator</name>
+  <name>orac_octomap_operations</name>
   <version>0.0.0</version>
-  <description>The focus_point_calculator package</description>
+  <description>The orac_octomap_operations package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -57,14 +57,16 @@
   <build_depend>octomap_msgs</build_depend>
   <build_depend>octomap_server</build_depend>
   <build_depend>octomap_rviz_plugins</build_depend>
-  <build_depend>dqrobotics</build_depend>
+  <build_depend>eigen</build_depend>
   <build_depend>message_generation</build_depend>
+  <build_depend>orac_reconstruction_services</build_depend>
   
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>geometry_msgs</build_export_depend>
-
+  <build_export_depend>eigen</build_export_depend>
+  
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
@@ -73,8 +75,8 @@
   <exec_depend>octomap_msgs</exec_depend>
   <exec_depend>octomap_server</exec_depend>
   <exec_depend>octomap_rviz_plugins</exec_depend>
-  <exec_depend>dqrobotics</exec_depend>
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>orac_reconstruction_services</exec_depend>
  
 
 
