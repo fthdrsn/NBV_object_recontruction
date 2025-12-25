@@ -8,7 +8,12 @@ focus_point_cls::focus_point_cls(const ros::NodeHandle &rosNode):rosNode_(rosNod
   params_ = readParams();
   boundary_max=params_.boundary_max;
   boundary_min=params_.boundary_min;
-  octo_map_sub =rosNode_.subscribe(params_.octomap_topic_name, 1, &focus_point_cls::octomap_callback, this);
+  octo_map_sub = rosNode_.subscribe(params_.octomap_topic_name, 1, &focus_point_cls::octomap_callback, this);
+  // Subscribe to coarse octomap if topic is configured (not empty)
+  if (params_.raycast_use_low_res_octomap && !params_.lowres_octomap_topic_name.empty()) {
+    octo_map_coarse_sub = rosNode_.subscribe(params_.lowres_octomap_topic_name, 1, &focus_point_cls::octomap_coarse_callback, this);
+    ROS_INFO_STREAM("Subscribed to coarse octomap: " << params_.lowres_octomap_topic_name);
+  }
   coverage_service=rosNode_.advertiseService("get_coverage",&focus_point_cls::calculate_occluded_volume,this);
   focus_point_service=rosNode_.advertiseService("get_focus_point",&focus_point_cls::calculate_focus_point,this);
   view_evaluate_service=rosNode_.advertiseService("get_view_igs",&focus_point_cls::calculate_view_igs,this);
@@ -66,8 +71,34 @@ void focus_point_cls::octomap_callback(const octomap_msgs::Octomap& msg)
   }
   delete ot;
   is_octomap_received=true;
-  lowres_needs_rebuild = true;  // Update low-res tree when only necessary
   ROS_DEBUG_STREAM("Octomap updated");
+}
+
+// Coarse octomap callback
+void focus_point_cls::octomap_coarse_callback(const octomap_msgs::Octomap& msg)
+{
+  if (block_octomap_updates)
+  {
+    ROS_DEBUG_STREAM("Coarse octomap update blocked by user");
+    return;
+  }
+
+  ROS_DEBUG_STREAM("Received coarse octomap message");
+  octomap::AbstractOcTree* aot = octomap_msgs::msgToMap(msg);
+  octomap::OcTree* ot = dynamic_cast<octomap::OcTree*>(aot);
+  if (!ot)
+  {
+      ROS_ERROR("Received coarse Octomap is not an OcTree");
+      delete aot;
+      return;
+  }
+  {
+    std::lock_guard<std::mutex> lock(coarse_octomap_mutex);
+    ot_coarse_ = std::make_shared<octomap::OcTree>(*ot);
+  }
+  delete ot;
+  is_coarse_octomap_received = true;
+  ROS_DEBUG_STREAM("Coarse Octomap updated");
 }
 
 /**
@@ -86,35 +117,7 @@ bool focus_point_cls::stop_octomap_update(focus_point_calculator::stop_octomap_u
   resp.success=true;
   return true;
 }
-/**
- * Rebuilds the low-resolution octomap by aggregating probabilities from the high-resolution octomap.
- */
-void focus_point_cls::rebuild_lowres_tree()
-{
-  // Build a lower-resolution tree by aggregating fine voxels' probabilities
-  double new_res = params_.low_res_cell_size; 
-  try
-  {
-    std::shared_ptr<octomap::OcTree> coarse_model = std::make_shared<octomap::OcTree>(new_res);
-
-    for (octomap::OcTree::leaf_iterator it = ot_->begin_leafs(); it != ot_->end_leafs(); ++it)
-    {
-      octomap::point3d coord = it.getCoordinate();
-      float log_odds = it->getLogOdds();
-      coarse_model->setNodeValue(coord, log_odds);
-    }
-
-    coarse_model->updateInnerOccupancy();
-    coarse_model->toMaxLikelihood();
-    coarse_model->prune();
-    ot_lowres_ = coarse_model;
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR_STREAM("Failed to rebuild low-res octomap: " << e.what());
-    ot_lowres_.reset();
-  }
-}
+/* Low-resolution rebuild removed. Using separate coarse octomap subscription when enabled. */
 
 /**
  * Service function to calculate the information gain (IG) for a list of views.
@@ -123,29 +126,22 @@ void focus_point_cls::rebuild_lowres_tree()
  */
  bool focus_point_cls::calculate_view_igs(focus_point_calculator::view_evaluate_srv::Request &req,focus_point_calculator::view_evaluate_srv::Response &resp)
  {
-  bool use_low_res=params_.use_low_res;
+  bool use_low_res=params_.raycast_use_low_res_octomap;
   if(is_octomap_received)
   {
   std::shared_ptr<octomap::OcTree> ot;
   {
-        std::lock_guard<std::mutex> lock(octomap_mutex);
-        if (use_low_res)  
+        
+        if (use_low_res && is_coarse_octomap_received)
         {
-          // Lazy rebuild: only rebuild if stale
-          if (lowres_needs_rebuild)
-          {
-            auto map_copy_time = std::chrono::steady_clock::now();
-            rebuild_lowres_tree();
-            lowres_needs_rebuild = false;
-            auto map_copy_end_time = std::chrono::steady_clock::now();
-            ROS_INFO_STREAM("Low-res octomap rebuild time: "
-                            << std::chrono::duration_cast<std::chrono::milliseconds>(map_copy_end_time - map_copy_time).count()
-                            << " ms");
-          }
-          ot = ot_lowres_;
+          std::lock_guard<std::mutex> lock(coarse_octomap_mutex);
+          ot = ot_coarse_;
         }
         else
+        { 
+          std::lock_guard<std::mutex> lock(octomap_mutex);
           ot = ot_;
+        }
   }
     if (req.view_list.size() % 7 != 0)
     {
@@ -491,25 +487,22 @@ double focus_point_cls::get_view_ig_rsv_parallel(std::vector<float>& pose_vec, s
 
 bool focus_point_cls::calculate_focus_point(focus_point_calculator::focus_point_srv::Request &req,focus_point_calculator::focus_point_srv::Response &resp)
 {
-  bool use_low_res=params_.use_low_res;
+  bool use_low_res=params_.raycast_use_low_res_octomap;
   if(is_octomap_received)
   {
   std::shared_ptr<octomap::OcTree> ot;
   {
-        std::lock_guard<std::mutex> lock(octomap_mutex);
         
-        if(use_low_res)
+        if (use_low_res && is_coarse_octomap_received)
         {
-          // Lazy rebuild: only rebuild if stale
-          if (lowres_needs_rebuild)
-          {
-            rebuild_lowres_tree();
-            lowres_needs_rebuild = false;
-          }
-          ot = ot_lowres_;
+          std::lock_guard<std::mutex> lock(coarse_octomap_mutex);
+          ot = ot_coarse_;
         }
         else
+        {
+          std::lock_guard<std::mutex> lock(octomap_mutex);
           ot = ot_;
+        }
   }
   std::cout<<"Start focus point calculation"<<std::endl;
   std::vector<float> req_vec=req.pose;
@@ -738,23 +731,19 @@ Eigen::Vector3d focus_point_cls::get_focus_point_parallel(std::vector<float>& po
  */
 bool focus_point_cls::calculate_frontier(focus_point_calculator::get_frontier_srv::Request &req, focus_point_calculator::get_frontier_srv::Response &resp)
 {
-  bool use_low_res=params_.use_low_res;
+  bool use_low_res=params_.raycast_use_low_res_octomap;
   std::shared_ptr<octomap::OcTree> ot;
   {
-      std::lock_guard<std::mutex> lock(octomap_mutex);
-        
-        if(use_low_res)
-        {
-          // Lazy rebuild: only rebuild if stale
-          if (lowres_needs_rebuild)
-          {
-            rebuild_lowres_tree();
-            lowres_needs_rebuild = false;
-          }
-          ot = ot_lowres_;
-        }
-        else
-          ot = ot_;
+      if (use_low_res && is_coarse_octomap_received)
+      {
+        std::lock_guard<std::mutex> lock(coarse_octomap_mutex);
+        ot = ot_coarse_;
+      }
+      else
+      {
+        std::lock_guard<std::mutex> lock(octomap_mutex);
+        ot = ot_;
+      }
   }
   // Ensure indices are aligned to the current frontier set only
   frontier_voxels.clear();
@@ -817,23 +806,20 @@ void focus_point_cls::extract_frontier(
 bool focus_point_cls::calculate_view_frontier(focus_point_calculator::get_view_frontier_srv::Request &req, focus_point_calculator::get_view_frontier_srv::Response &resp)
 {
   
-  bool use_low_res=params_.use_low_res;
+  bool use_low_res=params_.raycast_use_low_res_octomap;
     std::shared_ptr<octomap::OcTree> ot;
     {
-        std::lock_guard<std::mutex> lock(octomap_mutex);
-          
-          if(use_low_res)
+        
+          if (use_low_res && is_coarse_octomap_received)
           {
-            // Lazy rebuild: only rebuild if stale
-            if (lowres_needs_rebuild)
-            {
-              rebuild_lowres_tree();
-              lowres_needs_rebuild = false;
-            }
-            ot = ot_lowres_;
+            std::lock_guard<std::mutex> lock(coarse_octomap_mutex);
+            ot = ot_coarse_;
           }
           else
+          {
+            std::lock_guard<std::mutex> lock(octomap_mutex);
             ot = ot_;
+          }
     }
 
   if (frontier_voxels.empty()) 

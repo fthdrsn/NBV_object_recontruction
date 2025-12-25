@@ -13,8 +13,9 @@ struct Params
   double dphi;
   double dtheta;
   double r_max;
-
+  bool raycast_use_low_res_octomap;
   std::string octomap_topic_name;
+  std::string lowres_octomap_topic_name;  // Optional: coarse octomap topic
   std::string octomap_save_path;
 
   double cell_size;

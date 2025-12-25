@@ -43,6 +43,9 @@ Params readParams()
   if (!ros::param::get(ns + "/raycast/r_max", params.r_max)) {
     ROS_WARN_STREAM("No /raycast/r_max specified. Default: " << params.r_max);
   }
+  params.raycast_use_low_res_octomap = false;
+  if (!ros::param::get(ns + "/raycast/use_low_res_octomap", params.raycast_use_low_res_octomap)) {
+    ROS_WARN_STREAM("No /raycast/use_low_res_octomap specified. Default: " << params.raycast_use_low_res_octomap);}
 
   
   params.boundary_min={-2.75, -2.75, 0.1};
@@ -58,6 +61,11 @@ Params readParams()
   params.octomap_topic_name = "/octomap_full";
   if (!ros::param::get(ns + "/octomap/topic_name", params.octomap_topic_name )) {
     ROS_WARN_STREAM("No /octomap/topic_name specified. Default: " << params.octomap_topic_name);
+  }
+  // Optional coarse octomap topic; if set, focus_point can subscribe to a second, low-res tree
+  params.lowres_octomap_topic_name = "";
+  if (!ros::param::get(ns + "/octomap/lowres_topic_name", params.lowres_octomap_topic_name )) {
+    ROS_WARN_STREAM("No /octomap/lowres_topic_name specified. Dual-octomap disabled.");
   }
   params.octomap_save_path = "/home/fth/NBV_Youbot/src/map_";
   if (!ros::param::get(ns + "/octomap/save_path", params.octomap_save_path)) {

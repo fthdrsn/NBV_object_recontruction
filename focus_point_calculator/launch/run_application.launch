@@ -1,11 +1,23 @@
 <?xml version="1.0"?>
 <launch>
+  <!-- Need to change the parameters in focus_point_params.yaml accordingly -->
+  <arg name="use_low_res" default="false" doc="Use coarse octomap (starts dual octomap servers)"/>
+  <arg name="fine_res" default="0.03"/>
+  <arg name="coarse_res" default="0.12"/>
+  <arg name="max_range" default="4.5"/>
+  <!-- Always start depth processing -->
   <include file="$(find focus_point_calculator)/launch/process_depth.launch" />
-  <include file="$(find focus_point_calculator)/launch/octomap_server.launch" />
+  
+  <!-- Octomap servers: fine always; coarse only when use_low_res=true -->
+  <include file="$(find focus_point_calculator)/launch/octomap_servers.launch">
+    <arg name="use_low_res" value="$(arg use_low_res)"/>
+    <arg name="fine_res" value="$(arg fine_res)"/>
+    <arg name="coarse_res" value="$(arg coarse_res)"/>
+    <arg name="max_range" value="$(arg max_range)"/>
+  </include>
   
   <node name="focus_point_node" pkg="focus_point_calculator" type="focus_point_calculator_node" clear_params="true" output="screen"/>
-
-  <rosparam command="load" file="$(find focus_point_calculator)/config/focus_point_params.yaml" />
+  <rosparam command="load" file="$(find focus_point_calculator)/config/focus_point_params.yaml"/>
 
 </launch>
 

@@ -32,7 +32,8 @@ class focus_point_cls
   ros::NodeHandle rosNode_;
   focus_point_cls(const ros::NodeHandle &rosNode);
   void octomap_callback(const octomap_msgs::Octomap& msg);
-  void rebuild_lowres_tree();
+  void octomap_coarse_callback(const octomap_msgs::Octomap& msg);
+
   bool is_inside_boundaries(Eigen::Vector4d point);
   bool calculate_occluded_volume(focus_point_calculator::coverage_srv::Request &req, focus_point_calculator::coverage_srv::Response &resp);
   Eigen::Vector3d get_focus_point(std::vector<float>& pose_vec, std::shared_ptr<octomap::OcTree>& ot);
@@ -58,7 +59,7 @@ class focus_point_cls
   void calculate_unit_ray_set(std::vector<Eigen::Vector3d>& unit_ray_set,double hfov, double vfov, double dphi, double dtheta);
   std::vector<Eigen::Vector3d> unit_rays_normal_view;
   std::vector<Eigen::Vector3d> unit_rays_expanded_view;
-  std::atomic<bool> is_octomap_received{false};
+
   ros::Subscriber octo_map_sub;
   ros::ServiceServer coverage_service;
   ros::ServiceServer focus_point_service;
@@ -68,10 +69,13 @@ class focus_point_cls
   ros::ServiceServer get_view_frontier_service;
   ros::ServiceServer stop_octomap_update_service;
   std::shared_ptr<octomap::OcTree> ot_;
-  std::shared_ptr<octomap::OcTree> ot_lowres_;
-  std::atomic<bool> lowres_needs_rebuild{true};
+  std::shared_ptr<octomap::OcTree> ot_coarse_;
+  std::atomic<bool> is_octomap_received{false};
+  std::atomic<bool> is_coarse_octomap_received{false};
   std::atomic<bool> block_octomap_updates{false};
+  ros::Subscriber octo_map_coarse_sub;
   std::mutex octomap_mutex;
+  std::mutex coarse_octomap_mutex;
   std::vector<double> boundary_max;
   std::vector<double> boundary_min;
   Params params_;
