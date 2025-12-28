@@ -34,7 +34,7 @@ class octomap_ops_cls
   void octomap_callback(const octomap_msgs::Octomap& msg);
   void octomap_coarse_callback(const octomap_msgs::Octomap& msg);
 
-  bool is_inside_boundaries(Eigen::Vector4d point);
+  bool is_inside_boundaries(Eigen::Vector3d point);
   bool calculate_occluded_volume(orac_reconstruction_services::coverage_srv::Request &req, orac_reconstruction_services::coverage_srv::Response &resp);
   Eigen::Vector3d get_focus_point(std::vector<float>& pose_vec, std::shared_ptr<octomap::OcTree>& ot);
   Eigen::Vector3d get_focus_point_parallel(std::vector<float>& pose_vec, std::shared_ptr<octomap::OcTree>& ot);

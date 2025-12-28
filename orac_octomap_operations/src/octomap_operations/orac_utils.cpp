@@ -51,7 +51,7 @@ void octomap_ops_cls::calculate_unit_ray_set(std::vector<Eigen::Vector3d>& unit_
  * @param point 3D point to check if it is inside boundaries.
  * @return True is the point is inside the boundaries.
  */
-bool octomap_ops_cls::is_inside_boundaries(Eigen::Vector4d point)
+bool octomap_ops_cls::is_inside_boundaries(Eigen::Vector3d point)
 {
   return point[0] > boundary_min[0] and point[0] < boundary_max[0] and
          point[1] > boundary_min[1] and point[1] < boundary_max[1] and

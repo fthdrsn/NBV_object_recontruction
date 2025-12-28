@@ -272,7 +272,7 @@ bool octomap_ops_cls::calculate_frontier(orac_reconstruction_services::get_front
   for(auto& k:f){
     auto p = ot->keyToCoord(k);
     
-    if (is_inside_boundaries(Eigen::Vector4d(p.x(),p.y(),p.z(),0))){
+    if (is_inside_boundaries(Eigen::Vector3d(p.x(),p.y(),p.z()))){
       resp.frontier_xyz.insert(resp.frontier_xyz.end(),
       {p.x(),p.y(),p.z()});
       frontier_voxels.push_back(k);
@@ -378,7 +378,7 @@ bool octomap_ops_cls::calculate_occluded_volume(orac_reconstruction_services::co
     for (float y=y_min;y<y_max;y=y+res)
       for (float z=z_min;z<z_max;z=z+res)
       {
-          Eigen::Vector4d v(x, y, z, 0);
+          Eigen::Vector3d v(x, y, z);
           if (!is_inside_boundaries(v))
                continue;
           octomap::OcTreeNode* result = ot->search(x+res/2,y+res/2,z+res/2);

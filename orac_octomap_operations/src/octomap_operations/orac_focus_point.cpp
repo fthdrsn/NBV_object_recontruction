@@ -21,22 +21,21 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point(std::vector<float>& pose_vec, s
   
   double best_ray_entropy=-1e100;
   Eigen::Vector3d focus_point(0,0,0);
+  double max_range=params_.r_max;
   octomap::KeyRay ray;
   for (int i = 0; i < static_cast<int>(unit_rays_expanded_view.size()); ++i)
     {
       const auto& u = unit_rays_expanded_view[i];
-      Eigen::Vector3d ray_vec(u.x()*r_ray_cast, u.y()*r_ray_cast, u.z()*r_ray_cast);
-      
-      // Transform ray direction by rotation and apply to endpoint calculation
-      Eigen::Vector3d rotated_ray = q * ray_vec;
-      Eigen::Vector3d end_point_world = camera_pos + rotated_ray;
+      // Rotate unit ray direction
+      Eigen::Vector3d dir = q * Eigen::Vector3d(u.x(), u.y(), u.z());
+      dir.normalize();
 
-      octomap::point3d origin(camera_pos[0], camera_pos[1], camera_pos[2]);
-      octomap::point3d end_point(end_point_world[0], end_point_world[1], end_point_world[2]);
-      octomap::point3d direction(end_point_world[0]-camera_pos[0], end_point_world[1]-camera_pos[1], end_point_world[2]-camera_pos[2]);
-      direction.normalize();
-      double max_range=params_.r_max;
+      octomap::point3d origin(camera_pos.x(), camera_pos.y(), camera_pos.z());
+      octomap::point3d direction(dir.x(), dir.y(), dir.z());
+      octomap::point3d end_point;
+      
       bool found_endpoint = ot->castRay( origin, direction, end_point, true, max_range ); // ignore unknown cells
+     
       ray.reset();
       ot->computeRayKeys(origin, end_point, ray); //Compute octree keys for all traversed voxels (excluding the end_point)
       //Calculate the entropy of the ray
@@ -44,8 +43,7 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point(std::vector<float>& pose_vec, s
       for( KeyRay::iterator it = ray.begin() ; it!=ray.end(); ++it )
         {
         octomap::point3d coord = ot->keyToCoord(*it);
-        Eigen::Vector4d v(coord.x(), coord.y(), coord.z(), 0);
-        if (!is_inside_boundaries(v))
+        if (!is_inside_boundaries(Eigen::Vector3d(coord.x(), coord.y(), coord.z())))
               continue;
 
         octomap::OcTreeNode* node =ot->search(*it);
@@ -91,7 +89,6 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point(std::vector<float>& pose_vec, s
     }
       
     return focus_point;
-
 }
 
 /**
@@ -110,7 +107,7 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point_parallel(std::vector<float>& po
 
   double r_ray_cast=params_.r_max;
   float r_max_last=params_.focus_point_r;
-
+  double max_range=params_.r_max;
   double best_ray_entropy = -1e100;
   Eigen::Vector3d best_focus_point(0,0,0);
 
@@ -124,17 +121,13 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point_parallel(std::vector<float>& po
     for (int i = 0; i < static_cast<int>(unit_rays_expanded_view.size()); ++i)
     {
         const auto& u = unit_rays_expanded_view[i];
-        Eigen::Vector3d ray_vec(u.x()*r_ray_cast, u.y()*r_ray_cast, u.z()*r_ray_cast);
+        // Rotate unit ray direction
+        Eigen::Vector3d dir = q * Eigen::Vector3d(u.x(), u.y(), u.z());
+        dir.normalize();
+        octomap::point3d origin(camera_pos.x(), camera_pos.y(), camera_pos.z());
+        octomap::point3d direction(dir.x(), dir.y(), dir.z());
+        octomap::point3d end_point;
         
-        // Transform ray direction by rotation
-        Eigen::Vector3d rotated_ray = q * ray_vec;
-        Eigen::Vector3d end_point_world = camera_pos + rotated_ray;
-       
-        octomap::point3d origin(camera_pos[0], camera_pos[1], camera_pos[2]);
-        octomap::point3d end_point(end_point_world[0], end_point_world[1], end_point_world[2]);
-        octomap::point3d direction(end_point_world[0]-camera_pos[0], end_point_world[1]-camera_pos[1], end_point_world[2]-camera_pos[2]);
-        direction.normalize();
-        double max_range=params_.r_max;
         bool found_endpoint = ot->castRay( origin, direction, end_point, true, max_range );
 
         // Compute ray entropy
@@ -144,8 +137,8 @@ Eigen::Vector3d octomap_ops_cls::get_focus_point_parallel(std::vector<float>& po
         for( octomap::KeyRay::iterator it = ray.begin() ; it!=ray.end(); ++it )
         {
           octomap::point3d coord = ot->keyToCoord(*it);
-          Eigen::Vector4d v(coord.x(), coord.y(), coord.z(), 0);
-          if (!is_inside_boundaries(v))
+
+          if (!is_inside_boundaries(Eigen::Vector3d(coord.x(), coord.y(), coord.z())))
                continue;
 
           octomap::OcTreeNode* node =ot->search(*it);
