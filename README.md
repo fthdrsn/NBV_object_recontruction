@@ -17,13 +17,13 @@ and AI, University of Manchester,
 
 </div>
 
-# 📜 Abstract
+# 📜 Introduction
 
 Object reconstruction and inspection tasks play a crucial role in various robotics applications. Identifying paths that reveal the most unknown areas of the object becomes paramount in this context, as it directly affects efficiency, and this problem is known as the view path planning problem. Current methods often use sampling-based path planning techniques, evaluating potential views along the path to enhance reconstruction performance. However, these methods are computationally expensive as they require evaluating several candidate views on the path. To this end, we propose a computationally efficient solution that relies on calculating a focus point in the most informative (unknown) region and having the robot maintain this point in the camera field of view along the path. We incorporated this strategy into the whole-body
 control of a mobile manipulator employing a visibility constraint without the need for an additional path planner. We conducted comprehensive and realistic simulations using a large dataset of 114 diverse objects of varying sizes from 57 categories to compare our method with a  ampling-based planning strategy using Bayesian data analysis. Furthermore, we performed real-world experiments with an 8-DoF mobile manipulator to demonstrate the proposed method’s performance in practice. Our results suggest that there is no significant difference in object coverage and entropy. In contrast, our method is approximately nine times faster than the baseline sampling-based method in terms of the
 average time the robot spends between views.
 
-![alt text](image.png)
+![intro](images/Intro.png)
 ## 🔧 Installation
 
 ### Prerequisites
@@ -159,16 +159,6 @@ octomap/low_res_cell_size: 0.12  ## Resolution of the low resolution octomap (if
 ```
 It is very important to match the OctoMap parameters in the launch file and the configuration file.
 
-
-
-
-
-
-
-
-
-
-
 ## 📝 Citation
 
 If you use this work in your research, please cite:
@@ -191,6 +181,19 @@ This project builds upon several libraries and dataset:
 - **[PyRep](https://github.com/stepjam/PyRep)** - CoppeliaSim Python interface
 - **[OctoMap](https://octomap.github.io/)** - Efficient 3D mapping framework
 - **[ShapeNet](https://huggingface.co/datasets/ShapeNet/ShapeNetCore)** - Object Dataset
+
+## 🐛 Troubleshooting
+### Visualizing the OctoMap with RViz
+
+When you run rviz, you might encounter the following "incompatible Qt version" error:
+
+![QT Error](images/Qt_error.png "QT Error")
+
+To solve this problem caused by the Pyrep library changing the QT path (you have changed the bashrc file during PyRep installation), you need to comment out the following lines in your bashrc file:
+
+![Bashrc](images/bashrc.png "Bashrc")
+
+Now, if you run source ~/.bashrc and open a new terminal, rviz should work without further problem.
 
 ## 📄 License
 
