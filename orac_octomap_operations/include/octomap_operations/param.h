@@ -27,7 +27,6 @@ struct Params
   std::vector<double> boundary_min;
   std::vector<double> boundary_max;
 
-  bool use_low_res;
   double low_res_cell_size;
 
 };

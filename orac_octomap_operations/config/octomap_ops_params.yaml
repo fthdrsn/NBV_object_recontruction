@@ -1,5 +1,5 @@
-camera/horizontal_fov: 74 #74 ## Horizontal field of view
-camera/vertical_fov: 60 #60 ## Vertical field of view
+camera/horizontal_fov: 74 #74 ## Horizontal field of view 60 45
+camera/vertical_fov: 60 #60 ## Vertical field of view  47  38
 
 camera/horizontal_fov_expanded: 90 ## Horizontal field of view
 camera/vertical_fov_expanded: 90  ## Vertical field of view
@@ -13,7 +13,6 @@ octomap/topic_name: "/octomap_server_fine/octomap_full" ## Octomap topic name pu
 octomap/lowres_topic_name: "/octomap_server_coarse/octomap_full" ## Optional: Coarse octomap topic
 octomap/save_path: "/home/fth/NBV_Youbot/src/map_" ## Path to save octomap
 octomap/cell_size: 0.03  ## Resolution of the octomap
-octomap/use_low_res: false ## Use low resolution octomap for focus point calculation
 octomap/low_res_cell_size: 0.12  ## Resolution of the low resolution octomap (if using coarse server)
 
 focus_pnt/focus_r: 2.5  ## Radius to calculate the focus point.

@@ -87,10 +87,6 @@ Params readParams()
     ROS_WARN_STREAM("No /frontier/neighbor_expansion specified. Default: " << params.frontier_neighbor_expansion);
   }
 
-  params.use_low_res = false;
-  if (!ros::param::get(ns + "/octomap/use_low_res", params.use_low_res)) {
-    ROS_WARN_STREAM("No /octomap/use_low_res specified. Default: " << params.use_low_res);
-  } 
   params.low_res_cell_size = 0.06;
   if (!ros::param::get(ns + "/octomap/low_res_cell_size", params.low_res_cell_size)) {
     ROS_WARN_STREAM("No /octomap/low_res_cell_size specified. Default: " << params.low_res_cell_size);
