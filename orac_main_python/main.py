@@ -25,6 +25,9 @@ from copy import deepcopy
 import time
 import os
 
+from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import Point
+
 
 class TerminationReason(enum.Enum):
     SUCCESS = 0
@@ -584,7 +587,13 @@ class MainClass():
 
         return result_dic
 
-    def move_to_NBV_sampling(self, nbv_pose_dq, circ_dir=1, show_rrt_paths=False):
+    def move_to_NBV_sampling(self, nbv_pose_dq, circ_dir=1, show_rrt_paths=True):
+
+        # Create marker dictionary to visualize RRT* paths
+        self.sampling_marker_dict = {"rrt_nodes": [],
+                                     "rrt_global_path_nodes": [],
+                                     "rrt_edges": [],
+                                     "sample_views": []}
 
         # Keep trying to find a proper path until it finds one
         robot_q = self.robot_model.get_q_from_sim()
@@ -612,10 +621,11 @@ class MainClass():
         if not is_plan_found:
             return False
 
-        # Show the RRT* paths in CoppeliaSim
-        if show_rrt_paths:
-            self.visual_manager.show_rrt_paths(rrt_result_dic)
-            self.pr.step()
+        # Extract RRT edges efficiently
+        rrt_edges = ipp.rrt_plan.extract_rrt_edges()
+        self.sampling_marker_dict["rrt_nodes"] = rrt_result_dic["rrt_node_list"]
+        self.sampling_marker_dict["rrt_global_path_nodes"] = rrt_result_dic["rrt_positions"]
+        self.sampling_marker_dict["rrt_edges"] = rrt_edges
 
         # Rule out the path nodes that are too close to target and initial positions
         dist_to_start = np.linalg.norm(
@@ -624,8 +634,6 @@ class MainClass():
             rrt_result_dic["rrt_positions"]-nbv_position_np, axis=1)
         rrt_path_np = np.array(rrt_result_dic["rrt_positions"])[
             (dist_to_start > 1) & (dist_to_target > 1)]
-        if show_rrt_paths:
-            self.visual_manager.show_shortest_rrt_path(rrt_path_np)
 
         # Reverse the path node list to make it from start to finish
         rrt_path_np = np.array(rrt_path_np)[::-1]
@@ -652,9 +660,11 @@ class MainClass():
                 # Sample 10 views around the node
                 sphere_sample_list = ipp.sample_in_sphere(
                     path_node)
+
+                self.sampling_marker_dict["sample_views"] = sphere_sample_list
                 if show_rrt_paths:
-                    self.visual_manager.show_rrt_candidate_views(
-                        sphere_sample_list)
+                    self.publish_markers(self.sampling_marker_dict)
+
                 # Make the views one vector for the ros server request
                 view_list_srv = []
                 for dq_pose in sphere_sample_list:
@@ -895,6 +905,9 @@ class MainClass():
         self.octomap_save_func = rospy.ServiceProxy(
             "save_octomap", save_octomap_srv)
 
+        self.sampling_path_pub = rospy.Publisher(
+            "/sampling_path", MarkerArray, queue_size=1)
+
         # Get the launch file path to launch a new session from this script
         self.launch_file_path = self.params["NBV"]["launchFilePath"]
 
@@ -939,6 +952,106 @@ class MainClass():
             "robot_safe_rad": self.params["RandomEnvironment"]["robotSafeRadius"]
         }
         self.rand_env_gen = RandomEnv(self.random_env_params)
+
+    def publish_markers(self, markers_dict):
+        marker_array = MarkerArray()
+        # Include nodes as spheres
+        for i, node in enumerate(markers_dict["rrt_nodes"]):
+            marker = Marker()
+            marker.header.frame_id = "world"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "rrt_nodes"
+            marker.id = i
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = node.x
+            marker.pose.position.y = node.y
+            marker.pose.position.z = node.z
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.1  # Sphere diameter
+            marker.scale.y = 0.1
+            marker.scale.z = 0.1
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker_array.markers.append(marker)
+
+        # Include global path nodes as green spheres
+        for i, node in enumerate(markers_dict["rrt_global_path_nodes"]):
+            marker = Marker()
+            marker.header.frame_id = "world"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "rrt_global_path"
+            marker.id = i
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = node[0]
+            marker.pose.position.y = node[1]
+            marker.pose.position.z = node[2]
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.15  # Sphere diameter
+            marker.scale.y = 0.15
+            marker.scale.z = 0.15
+            marker.color.r = 0.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker_array.markers.append(marker)
+
+        # Include edges as line strips
+        for i, edge in enumerate(markers_dict["rrt_edges"]):
+            marker = Marker()
+            marker.header.frame_id = "world"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "rrt_edges"
+            marker.id = i
+            marker.type = Marker.LINE_STRIP
+            marker.action = Marker.ADD
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.01  # Line width
+            marker.color.r = 0.0
+            marker.color.g = 0.0
+            marker.color.b = 1.0
+            marker.color.a = 1.0
+
+            start_point = Point()
+            start_point.x, start_point.y, start_point.z = edge[0]
+            end_point = Point()
+            end_point.x, end_point.y, end_point.z = edge[1]
+
+            marker.points.append(start_point)
+            marker.points.append(end_point)
+
+            marker_array.markers.append(marker)
+
+        # Include sampling best views as yellow spheres
+        for i, node in enumerate(markers_dict["sample_views"]):
+            node = vec3(translation(node))
+            marker = Marker()
+            marker.header.frame_id = "world"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "sample_views"
+            marker.id = i
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = node[0]
+            marker.pose.position.y = node[1]
+            marker.pose.position.z = node[2]
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.12  # Sphere diameter
+            marker.scale.y = 0.12
+            marker.scale.z = 0.12
+            marker.color.r = 1.0
+            marker.color.g = 1.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker_array.markers.append(marker)
+
+        self.sampling_path_pub.publish(marker_array)
 
 
 if __name__ == "__main__":

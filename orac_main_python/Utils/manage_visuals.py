@@ -23,9 +23,6 @@ class ManageVisuals:
         self.focus_point_visual = PyRepObj.Object.get_object("focus_point")
 
         self.obs_handle_list = []
-        self.rrt_paths_handle_list = []
-        self.rrt_shortest_path_handle_list = []
-        self.rrt_candidate_view_handle_list = []
 
     def set_depth_camera_parameters(self, res, persp_angle, clip_near=0.01, clip_far=5.0):
         """ Set the depth camera perspective parameters: resolution and angles """
@@ -75,75 +72,6 @@ class ManageVisuals:
             self.obs_handle_list.append(
                 self.obs_visual)  # Store obstacle handle
 
-    def show_rrt_paths(self, rrt_result_dic):
-        """ Show the RRT* planned path in the CoppeliaSim simulation """
-        self.clear_rrt_path()  # Clear existing RRT* path visuals
-        path_sample_count = 70
-        for rrt_node in rrt_result_dic["rrt_node_list"][:path_sample_count]:
-            prnt_list = []
-            prnt_list.append([rrt_node.x, rrt_node.y, rrt_node.z])
-            prnt = rrt_node.parent
-            if prnt != None:
-                prnt_list.append([prnt.x, prnt.y, prnt.z])
-            while prnt != None:
-                prnt = prnt.parent
-                if prnt != None:
-                    prnt_list.append([prnt.x, prnt.y, prnt.z])
-            prnt_np = np.array(prnt_list)
-            for i in range(0, prnt_np.shape[0]-1):
-                target_a1 = Shape.create(type=PrimitiveShape.SPHERE,
-                                         size=[0.05, 0.05, 0.05],
-                                         color=[0.0, 0.0, 1.0],
-                                         static=True, respondable=False, renderable=False)
-                target_a2 = Shape.create(type=PrimitiveShape.SPHERE,
-                                         size=[0.05, 0.05, 0.05],
-                                         color=[0.0, 0.0, 1.0],
-                                         static=True, respondable=False, renderable=False)
-                dir_cyl = (prnt_np[i+1]-prnt_np[i]) / \
-                    np.linalg.norm(prnt_np[i+1]-prnt_np[i])
-                len_cyl = np.linalg.norm(prnt_np[i+1]-prnt_np[i])
-                target_cyl = Shape.create(type=PrimitiveShape.CYLINDER,
-                                          size=[0.01, 0.01, len_cyl],
-                                          color=[1.0, 0.0, 0.0],
-                                          static=True, respondable=False, renderable=False)
-                position_cyl = prnt_np[i]+len_cyl*dir_cyl*0.5
-                position_cyl_dq = position_cyl[0]*i_ + \
-                    position_cyl[1]*j_+position_cyl[2]*k_
-                quat = direction_to_orientation(dir_cyl)
-                pose_cyl_dq = (quat+E_*0.5*position_cyl_dq*quat)
-                pose_cyl_dq = normalize(pose_cyl_dq)
-                target_a1.set_position(prnt_np[i])
-                target_a2.set_position(prnt_np[i+1])
-
-                self.comm_agent.set_object_pose(
-                    target_cyl, pose_cyl_dq)
-
-                self.rrt_paths_handle_list.append(target_a1)
-                self.rrt_paths_handle_list.append(target_a2)
-                self.rrt_paths_handle_list.append(target_cyl)
-
-    def show_shortest_rrt_path(self, rrt_path_points):
-        # Visualize tree nodes
-        self.clear_shortest_rrt_path()  # Clear existing shortest path visuals
-        for path_node_position in rrt_path_points:
-            target = Shape.create(type=PrimitiveShape.SPHERE,
-                                  size=[0.1, 0.1, 0.1],
-                                  color=[0.0, 1.0, 0.0],
-                                  static=True, respondable=False, renderable=False)
-            target.set_position(path_node_position)
-            self.rrt_shortest_path_handle_list.append(target)
-
-    def show_rrt_candidate_views(self, candidate_views_dq):
-        # Visualize candidate views
-        self.clear_rrt_candidate_views()  # Clear existing candidate view visuals
-        for view_dq in candidate_views_dq:
-            cam_visual = Shape.create(type=PrimitiveShape.CONE,
-                                      size=[0.05, 0.05, 0.1],
-                                      color=[1.0, 1.0, 0.0],
-                                      static=True, respondable=False, renderable=False)
-            self.comm_agent.set_object_pose(cam_visual, view_dq)
-            self.rrt_candidate_view_handle_list.append(cam_visual)
-
     def get_workspace_plane_poses(self):
         """ Get the workspace limits defined by
             four planes in the scene """
@@ -173,23 +101,3 @@ class ManageVisuals:
         for obs_handle in self.obs_handle_list:
             obs_handle.remove()
         self.obs_handle_list = []  # Clear the list of obstacle handles
-
-    def clear_rrt_path(self):
-        """ Remove all RRT* path visuals from the CoppeliaSim simulation """
-        for path_handle in self.rrt_paths_handle_list:
-            path_handle.remove()
-        self.rrt_paths_handle_list = []  # Clear the list of path handles
-
-    def clear_shortest_rrt_path(self):
-        """ Remove all shortest RRT* path visuals from the CoppeliaSim simulation """
-        for path_handle in self.rrt_shortest_path_handle_list:
-            path_handle.remove()
-        # Clear the list of shortest path handles
-        self.rrt_shortest_path_handle_list = []
-
-    def clear_rrt_candidate_views(self):
-        """ Remove all RRT* candidate view visuals from the CoppeliaSim simulation """
-        for view_handle in self.rrt_candidate_view_handle_list:
-            view_handle.remove()
-        # Clear the list of candidate view handles
-        self.rrt_candidate_view_handle_list = []

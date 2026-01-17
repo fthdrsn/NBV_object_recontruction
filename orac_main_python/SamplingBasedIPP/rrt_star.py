@@ -61,12 +61,9 @@ class RRT:
             self.parent = None
 
     def __init__(self,
-                 robot_map,
                  start,
                  goal,
-                 expand_dis=30.0,
-                 path_resolution=1.0,
-                 goal_sample_rate=20,
+                 expand_dis=0.5,
                  max_iter=300):
         """
         Setting Parameter
@@ -74,16 +71,11 @@ class RRT:
         goal:Goal Position [x,y]
         randArea:Random Sampling Area [min,max]
         """
-        robot_map = np.zeros((50, 50))
+
         self.start = self.Node(start[0], start[1], start[2])
         self.end = self.Node(goal[0], goal[1], goal[2])
-        self.map_bounds = [np.shape(robot_map)[0] - 1,
-                           np.shape(robot_map)[1] - 1]
         self.expand_dis = expand_dis
-        self.path_resolution = path_resolution
-        self.goal_sample_rate = goal_sample_rate
         self.max_iter = max_iter
-        self.map = robot_map
         self.min_height = 0.3
         self.max_height = 0.5
         self.min_rad = 2.75
@@ -105,14 +97,14 @@ class RRT:
 
             new_node = self.steer(nearest_node, rnd_node, self.expand_dis)
 
-            if self.check_collision(new_node, self.map):
+            if self.check_collision(new_node):
                 self.node_list.append(new_node)
 
             if self.calc_dist_to_goal(self.node_list[-1].x,
                                       self.node_list[-1].y, self.node_list[-1].y) <= self.expand_dis:
                 final_node = self.steer(self.node_list[-1], self.end,
                                         self.expand_dis)
-                if self.check_collision(final_node, self.map):
+                if self.check_collision(final_node):
                     return self.generate_final_course(len(self.node_list) - 1)
 
         return None  # cannot find path
@@ -189,7 +181,7 @@ class RRT:
 
         return minind
 
-    def check_collision(self, node, robot_map):
+    def check_collision(self, node):
 
         if node is None:
             return False
@@ -234,22 +226,18 @@ class RRTStar(RRT):
             self.min_dist = 0.2
 
     def __init__(self,
-                 robot_map,
                  start,
                  goal,
-                 expand_dis=30.0,
-                 path_resolution=1.0,
-                 goal_sample_rate=20,
+                 expand_dis=0.3,
                  max_iter=300,
                  min_iter=300,
                  connect_circle_dist=50.0):
         """
         Setting Parameter
         goal:Goal Position [x,y]
-        map: robot map, 0 = free, 1 = occupied, 2 = unobserved
+
         """
-        super().__init__(robot_map, start, goal, expand_dis, path_resolution,
-                         goal_sample_rate, max_iter)
+        super().__init__(start, goal, expand_dis, max_iter=max_iter)
         self.connect_circle_dist = connect_circle_dist
         self.goal_node = self.Node(goal[0], goal[1], goal[2])
         self.min_iter = min_iter
@@ -273,7 +261,7 @@ class RRTStar(RRT):
             curr_cost = self.calc_distance(new_node, near_node)
             new_node.cost = near_node.cost + curr_cost
 
-            if self.check_collision(new_node, self.map):
+            if self.check_collision(new_node):
                 near_inds = self.find_near_nodes(new_node)
                 node_with_updated_parent = self.choose_parent(
                     new_node, near_inds)
@@ -319,7 +307,7 @@ class RRTStar(RRT):
         for i in near_inds:
             near_node = self.node_list[i]
             t_node = self.steer(near_node, new_node)
-            if t_node and self.check_collision(t_node, self.map):
+            if t_node and self.check_collision(t_node):
                 costs.append(self.calc_new_cost(near_node, new_node))
             else:
                 costs.append(float("inf"))  # the cost of collision node
@@ -347,7 +335,7 @@ class RRTStar(RRT):
         safe_goal_inds = []
         for goal_ind in goal_inds:
             t_node = self.steer(self.node_list[goal_ind], self.goal_node)
-            if self.check_collision(t_node, self.map):
+            if self.check_collision(t_node):
                 safe_goal_inds.append(goal_ind)
 
         if not safe_goal_inds:
@@ -408,7 +396,7 @@ class RRTStar(RRT):
                 continue
             edge_node.cost = self.calc_new_cost(new_node, near_node)
 
-            no_collision = self.check_collision(edge_node, self.map)
+            no_collision = self.check_collision(edge_node)
             improved_cost = near_node.cost > edge_node.cost
 
             if no_collision and improved_cost:
@@ -433,3 +421,25 @@ class RRTStar(RRT):
             if node.parent == parent_node:
                 node.cost = self.calc_new_cost(parent_node, node)
                 self.propagate_cost_to_leaves(node)
+
+    def extract_rrt_edges(self):
+        """ Extract RRT edges """
+        edges = []
+
+        # Iterate through all nodes once
+        for rrt_node in self.node_list:
+            # Skip if node has no parent (root node)
+            if rrt_node.parent is None:
+                continue
+
+            # Extract current node position
+            child_pos = [rrt_node.x, rrt_node.y, rrt_node.z]
+
+            # Extract parent node position
+            parent_pos = [rrt_node.parent.x,
+                          rrt_node.parent.y, rrt_node.parent.z]
+
+            # Add edge from parent to child
+            edges.append([parent_pos, child_pos])
+
+        return edges
